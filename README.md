@@ -1,0 +1,86 @@
+<p align="center">
+  <img src="logo.png" alt="Linger: a watchful ghost holding a magnifying glass" width="240">
+  <br />
+  <!-- repo-tagline:start -->
+  <strong>🔎 Find what is lingering. Understand what must stay 👻</strong>
+  <!-- repo-tagline:end -->
+</p>
+
+Linger helps macOS developers review suspicious background processes without
+changing them. Its terminal interface puts review candidates first and explains
+each classification. Codex-specific checks help distinguish review candidates
+from helpers that may still hold a saved chat's REPL variables or browser state.
+
+**This is a read-only prototype.** It has no kill, signal, pause, renice, cleanup,
+or settings-changing operations, and no background service or network client.
+It writes ownership history only to Linger's own private cache; `--no-cache`
+disables those cache reads and writes. Codex files remain read-only.
+
+## Try it
+
+Requires **Python 3.11 or newer with curses**. There are no third-party
+dependencies or global installation steps. From this repository's root, run:
+
+```sh
+python3 -m linger --demo --once
+```
+
+You'll see a `DEMO / SYNTHETIC` snapshot with process classifications, reasons,
+and sample saved-chat activity. The demo works without macOS and does not inspect
+your local processes or chats. For example, one candidate explains its uncertainty:
+
+```text
+   4901    50 REVIEW          117.2M    2.0h /demo/old-worker
+        Parent is launchd; could be orphaned or a managed service.
+        No CPU increase observed for 120s; this does not prove abandonment.
+```
+
+The demo's `LIKELY STALE` row illustrates a future detector. **The live version
+cannot yet identify completed ephemeral Codex helpers.**
+
+On **macOS**, open an interactive terminal and inspect your own processes:
+
+```sh
+python3 -m linger
+```
+
+Use `j` / `k` or the arrow keys to select a process and read its explanation.
+Press `Tab` for saved-chat evidence, `c` to cycle scopes, `?` for help, and
+`q` to quit. The view refreshes every five seconds.
+
+## Read the result
+
+- **Prioritize inspection.** `REVIEW` flags evidence worth checking, such as a
+  missing parent or observed CPU inactivity. Scores are rule weights, not
+  probabilities or permission to terminate anything.
+- **Recognize possible tool state.** Codex classifications preserve recognized
+  infrastructure, saved-chat associations, and unresolved helpers. A completed
+  chat turn does not mean its REPL or browser state can be discarded.
+- **Follow observed associations.** While the terminal interface runs, Linger
+  watches Codex's existing execution registry and remembers validated process/chat
+  associations across Linger restarts, rechecking PID and native birth time before
+  using them. It can retain multiple
+  chat associations for one process; exclusive ownership is not established.
+
+Old age, low CPU, absent registry records, or absence from the saved-chat index
+do not prove abandonment. Starting Linger after an execution finishes cannot
+recover its vanished registry record unless Linger previously observed and cached
+the association. One-shot modes load validated history and sample once. Summed RSS includes shared memory and is not an
+estimate of reclaimable RAM.
+
+## Go deeper
+
+- [Usage and interpretation](docs/usage.md): all controls, process and chat
+  labels, Codex-only scope, JSON output, alternate Codex homes, and limitations.
+  JSON can include private executable paths and chat IDs; inspect it before sharing.
+- [Evidence and implementation](docs/evidence.md): data sources, scoring rules,
+  registry validation, and module boundaries.
+- [Ownership investigation](docs/ownership.md) and
+  [read-only signal audit](docs/read-only-signals.md): verified observations and
+  the remaining gaps in ephemeral-helper detection.
+
+To run the test suite from the repository root:
+
+```sh
+python3 -m unittest discover -s tests -v
+```

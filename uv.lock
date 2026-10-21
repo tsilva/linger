@@ -1,0 +1,28 @@
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[options]
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
+exclude-newer-span = "P7D"
+
+[options.exclude-newer-package]
+gradlab = false
+env-vizdoom-turbo = false
+env-supermariobrosnes-turbo-emu = false
+env-gradoom-turbo-torch = false
+unsloth-zoo = false
+env-stableretro-turbo = false
+unsloth = false
+env-breakoutatari2600-turbo-native = false
+
+[manifest]
+constraints = [
+    { name = "guardrails-ai", specifier = "!=0.10.1" },
+    { name = "mistralai", specifier = "!=2.4.6" },
+]
+
+[[package]]
+name = "linger"
+version = "0.1.0"
+source = { virtual = "." }
