@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "linger"
 version = "0.1.0"
@@ -5,7 +9,12 @@ description = "Read-only process triage for macOS, with conservative Codex aware
 requires-python = ">=3.11"
 dependencies = []
 
+[project.scripts]
+linger = "linger.__main__:main"
+
+[tool.setuptools]
+packages = ["linger"]
+
 [tool.uv]
-package = false
 exclude-newer = "7 days"
 constraint-dependencies = ["mistralai!=2.4.6", "guardrails-ai!=0.10.1"]

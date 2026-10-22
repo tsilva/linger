@@ -1,6 +1,7 @@
 """Explainable suspicion, not a probability of safe termination."""
 
 import os
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 
 from .models import Finding, Process
@@ -11,6 +12,34 @@ INFRASTRUCTURE = {
     "postgres", "mysqld", "redis-server", "mongod", "nginx", "caddy", "httpd",
     "docker", "dockerd", "containerd", "ollama",
 }
+
+
+@dataclass(frozen=True)
+class Factor:
+    label: str
+    weight: int
+    reason: str
+
+
+def score_factors(p: Process, now: float, known_pids) -> tuple[Factor, ...]:
+    """The shared rule weights for unprotected, non-zombie processes."""
+    factors = []
+    if p.ppid == 1:
+        factors.append(Factor("launchd parent", 20,
+                             "Parent is launchd (PID 1): could be orphaned OR a legitimate managed service."))
+    elif p.ppid not in known_pids:
+        factors.append(Factor("parent absent", 40,
+                             "Parent absent from this snapshot; could also be a collection race."))
+    if p.tty in {"??", "?", "-"}:
+        factors.append(Factor("no terminal", 5,
+                             "No controlling terminal; normal for background services."))
+    if max(0, now - p.started) >= 1800:
+        factors.append(Factor("age over 30m", 10,
+                             "Running for at least 30 minutes (age is not idle time)."))
+    if p.sampled and p.observed_idle >= 60:
+        factors.append(Factor(f"idle observed {p.observed_idle:.0f}s", 15,
+                             f"No measurable CPU-time increase over {p.observed_idle:.0f}s observed by Linger; waiting work can be legitimate."))
+    return tuple(factors)
 
 
 def classify(rows: list[Process], now: float, uid: int | None = None) -> list[Finding]:
@@ -33,7 +62,6 @@ def classify(rows: list[Process], now: float, uid: int | None = None) -> list[Fi
         lineage = chain(p)
         codex = any(is_codex_executable(a.executable) for a in lineage)
         basename = PurePosixPath(p.executable).name
-        age = max(0, now - p.started)
         if codex:
             if is_codex_executable(p.executable) and basename not in {"node", "node_repl", "python", "python3"}:
                 reasons = ("Codex application/agent infrastructure; may serve active chats.", "No authoritative per-process chat ownership; preserve.")
@@ -58,23 +86,10 @@ def classify(rows: list[Process], now: float, uid: int | None = None) -> list[Fi
         if "Z" in p.state:
             findings.append(Finding(p, "ZOMBIE", 90, ("Kernel reports an exited, unreaped process (Z).", "Already exited: signaling it will not reclaim meaningful memory; parent must reap it.")))
             continue
-        score, reasons = 0, []
-        if p.ppid == 1:
-            score += 20
-            reasons.append("Parent is launchd (PID 1): could be orphaned OR a legitimate managed service.")
-        elif p.ppid not in by_pid:
-            score += 40
-            reasons.append("Parent absent from this snapshot; could also be a collection race.")
-        if p.tty in {"??", "?", "-"}:
-            score += 5
-            reasons.append("No controlling terminal; normal for background services.")
-        if age >= 1800:
-            score += 10
-            reasons.append("Running for at least 30 minutes (age is not idle time).")
-        if p.sampled and p.observed_idle >= 60:
-            score += 15
-            reasons.append(f"No measurable CPU-time increase over {p.observed_idle:.0f}s observed by Linger; waiting work can be legitimate.")
-        elif not p.sampled:
+        factors = score_factors(p, now, by_pid)
+        score = sum(f.weight for f in factors)
+        reasons = [f.reason for f in factors]
+        if not p.sampled:
             reasons.append("First sample: CPU inactivity has not been measured yet.")
         # Abandonment requires independent ownership/lifecycle evidence. Generic
         # ps facts cannot prove it, so this detector offers REVIEW, never STALE.

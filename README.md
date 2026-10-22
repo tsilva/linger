@@ -11,6 +11,10 @@ changing them. Its terminal interface puts review candidates first and explains
 each classification. Codex-specific checks help distinguish review candidates
 from helpers that may still hold a saved chat's REPL variables or browser state.
 
+![Linger's terminal interface showing review candidates and the selected process's scoring evidence](docs/images/linger.png)
+
+*Rendered capture of Linger running on macOS, with scoring evidence for the selected process.*
+
 **This is a read-only prototype.** It has no kill, signal, pause, renice, cleanup,
 or settings-changing operations, and no background service or network client.
 It writes ownership history only to Linger's own private cache; `--no-cache`
@@ -18,8 +22,8 @@ disables those cache reads and writes. Codex files remain read-only.
 
 ## Try it
 
-Requires **Python 3.11 or newer with curses**. There are no third-party
-dependencies or global installation steps. From this repository's root, run:
+Requires **Python 3.11 or newer with curses**. There are no third-party runtime
+dependencies. To try it without installing, run from this repository's root:
 
 ```sh
 python3 -m linger --demo --once
@@ -44,9 +48,22 @@ On **macOS**, open an interactive terminal and inspect your own processes:
 python3 -m linger
 ```
 
-Use `j` / `k` or the arrow keys to select a process and read its explanation.
-Press `Tab` for saved-chat evidence, `c` to cycle scopes, `?` for help, and
-`q` to quit. The view refreshes every five seconds.
+To install an editable global command with [uv](https://docs.astral.sh/uv/), run
+from the repository root:
+
+```sh
+uv tool install . -e
+linger
+```
+
+The installed command follows changes in this checkout, so keep the checkout in
+place. All command-line options also work with `linger`.
+
+The full-width process table keeps the selected row's evidence below it. Use
+`j` / `k` or the arrow keys to select, `i` to toggle the inspector, and `h` to
+expand CPU/RSS history. Press `Tab` for saved-chat associations, `c` to cycle
+scopes, `?` for help, and `q` to quit. The view refreshes every five seconds;
+CPU usage needs two samples. History stays in memory for this run.
 
 ## Read the result
 

@@ -132,6 +132,30 @@ feature requires a separate design, explicit user authorization, and fresh
 identity/ownership/lifecycle checks immediately before each action. The current
 code contains no such action feature.
 
+## Display history and evidence
+
+The terminal view uses the same `score_factors` definitions as classification;
+it never computes a second independent suspicion score. Protective labels and
+zombies keep their own explanations instead of being assigned generic factors.
+The default inspector is compact; full reasons and metadata remain scrollable.
+
+`history.py` records only successful displayed snapshots, using monotonic time.
+CPU% is delta CPU seconds divided by delta elapsed seconds, multiplied by 100;
+the first sample has no usage value. Counter regressions, nonpositive intervals,
+gaps beyond 60 seconds, and changed process identities reset that measurement.
+Display identities include native microsecond birth time when supplied by an
+ownership binding; otherwise the existing PID/start-time precision limit applies.
+Exited identities are removed, and each live series is limited to 60 seconds
+and 120 samples. This history is never persisted, added to JSON output, used
+to establish ownership, or allowed to override classification protections.
+
+Terminal colors separate execution observed in the last registry sample from
+preserved state and unresolved ownership. A fresh saved-chat lifecycle label
+alone does not give a process the mint execution color. The process snapshot
+age remains visible; registry polling and the five-second UI refresh have
+different cadences. Refresh failures retain the old view with a visible error
+and do not fabricate new history samples.
+
 ## Module boundaries
 
 - `processes.py`: platform collection and CPU-inactivity sampling.
@@ -143,6 +167,8 @@ code contains no such action feature.
 - `scoring.py`: conservative process classification with reasons.
 - `scan.py`: combine independent evidence into a snapshot.
 - `tui.py`: presentation, view controls, and background refresh.
+- `history.py`: bounded, identity-isolated CPU/RSS display samples.
+- `terminal.py`: cell-width-aware clipping, panel drawing, and terminal palettes.
 - `demo.py`: synthetic, clearly marked future and current examples.
 
 Live behavior was developed against the locally observed Codex `state_5.sqlite`

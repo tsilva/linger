@@ -8,7 +8,7 @@ the synthetic demo and tests also work on other platforms.
 ## Run
 
 Requires macOS and Python 3.11 or newer with curses. There are no third-party
-dependencies. From the repository directory:
+runtime dependencies. From the repository directory:
 
 ```sh
 python3 -m linger
@@ -25,9 +25,22 @@ python3 -m linger --demo --once
 python3 -m linger --no-cache     # Observe in memory; no persistent cache reads/writes
 ```
 
-Optionally use `uv run python -m linger`. `uv.lock` is included; the project has
-no dependencies. Nothing needs to be installed globally. The live collector is
-macOS-only; the demo and tests can run on other platforms.
+Optionally use `uv run python -m linger`. `uv.lock` is included. The live collector
+is macOS-only; the demo and tests can run on other platforms.
+
+### Global command
+
+With uv installed, run this from the repository root:
+
+```sh
+uv tool install . -e
+```
+
+Then use `linger` from any directory, for example `linger --demo --once` or
+`linger --scope codex`. The editable installation uses this checkout directly;
+source edits take effect without reinstalling. Keep the checkout in place, and
+rerun the install command if you move it. Use `uv tool uninstall linger` to remove
+the global command. The build uses setuptools; runtime dependencies remain empty.
 
 Use `--codex-home PATH` to read a different Codex state directory; the default is
 `~/.codex`. `--help` lists all arguments, and `--version` prints the version.
@@ -42,6 +55,8 @@ Use `--codex-home PATH` to read a different Codex state directory; the default i
 | `s` | Switch suspicion and memory sorting |
 | `/` | Filter by PID, executable, class, chat context ID, or explanation; Enter accepts, Esc clears |
 | `o` in saved chats | Show processes with observed associations to that chat |
+| `h` | Expand or collapse the selected process's CPU/RSS history |
+| `i` | Show or hide the evidence inspector, keeping the selected row |
 | `[` / `]` | Scroll the selected row's explanation |
 | `r` | Refresh now; otherwise refresh every five seconds |
 | `g` / `G`, Page Up / Down | Navigate the list |
@@ -51,6 +66,43 @@ Use `--codex-home PATH` to read a different Codex state directory; the default i
 The default sort puts unprotected candidates with higher suspicion scores first.
 Scores are rule weights, **not probabilities or permission to kill**. Summed RSS
 includes shared pages and is not an estimate of reclaimable memory.
+
+### Terminal layout and history
+
+The default view has compact overall counts, a full-width process table, and a
+short evidence inspector below the table. The inspector uses the classifier's
+own score factors; `[` / `]` make the full explanations and process context
+available beyond the compact summary. Filtering and scope change the table;
+the header counts still describe the whole snapshot. Memory sorting keeps the
+selected process selected. Page Up/Down move one visible page.
+
+Amber marks review candidates. Mint marks `CODEX ACTIVE` processes whose
+execution was observed in the latest registry sample. Lavender marks preserved
+state and infrastructure. Muted `CODEX UNKNOWN` processes remain protected;
+their ownership is unresolved. A `CODEX ACTIVE` label based only on saved-chat
+lifecycle evidence stays lavender because current execution was not observed.
+
+`CPU%` is the change in accumulated CPU time between two successful samples,
+divided by elapsed monotonic time. It starts as `--`; 100% represents one core
+and multithreaded processes may exceed 100%. The activity column shows a small
+CPU sparkline when usage changes, otherwise measured idle time or `steady`.
+An initial `sampling` value is not zero CPU usage.
+
+History is collapsed initially. Press `h` to inspect the selected process's
+CPU usage (%) and RSS samples from up to the last 60 seconds. Missing samples
+are left unplotted. History keeps at most 120 points per current process
+identity, discards exited processes, and resets CPU measurement after a long
+sampling gap, a backwards CPU counter, or an identity change. Native birth time
+is part of the identity when available. History is display-only and is never
+saved in the ownership cache or used to infer chat ownership or abandonment.
+The synthetic demo starts without prefabricated history too.
+
+The layout targets 120 columns by 36 rows and also works down to 76 columns by
+16 rows. Narrow layouts omit activity, then CPU%, then source columns to keep
+names and classifications readable. The inspector appears with at least 22
+rows, and expanded history requires the Processes view and at least 28 rows.
+`i` hides the inspector to give the process table more space. Panels return
+when there is room after a resize. Help is scrollable with `j` / `k`.
 
 | Process class | Meaning |
 | --- | --- |
@@ -136,7 +188,8 @@ times, an incomplete-history flag, and record identity anchors. It contains no
 prompts, tool output, launch arguments, or environments. Unknown cache versions,
 corruption, untrusted permissions, unavailable boot identity, or I/O failures
 leave missing associations unknown and protected; scanning continues in memory.
-The TUI shows cache status below the summary. Disk history is protective evidence,
+The TUI shows cache status in its bottom status line and full diagnostics in
+scrollable help. Disk history is protective evidence,
 never permission to terminate a process.
 
 Use `--no-cache` to skip all persistent cache reads and writes. It keeps the

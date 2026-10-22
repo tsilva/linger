@@ -4,12 +4,14 @@ import time
 
 from .models import Chat, Finding, Process, Snapshot
 
+_STARTED = time.time() - 7200
+
 
 def snapshot() -> Snapshot:
     now = time.time()
 
     def proc(pid, name, rss=120000):
-        return Process(pid, 1, 501, rss, now - 7200, 0.2, "S", "??", name, 120, True)
+        return Process(pid, 1, 501, rss, _STARTED, 0.2, "S", "??", name, 120, True)
 
     return Snapshot(now, [
         Finding(proc(4812, "/demo/ephemeral-helper"), "LIKELY STALE", 85,
