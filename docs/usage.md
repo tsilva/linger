@@ -45,6 +45,53 @@ the global command. The build uses setuptools; runtime dependencies remain empty
 Use `--codex-home PATH` to read a different Codex state directory; the default is
 `~/.codex`. `--help` lists all arguments, and `--version` prints the version.
 
+### Optional launch tracking
+
+Launch a command under observation, optionally declaring its helpers temporary:
+
+```sh
+linger run --temporary -- python3 your_script.py
+linger run -- python3 persistent_worker.py
+```
+
+This starts exactly the provided command without an implicit shell, inheriting
+the current directory, environment, standard input/output, and foreground process
+group. Use an explicit shell for pipelines. The wrapper waits for the command
+and returns its exit code (or 128 plus the terminating signal number). Ctrl-C
+reaches both through the terminal; Linger does not signal other processes. It
+does not detach jobs or run a background service. Use another terminal's `linger`
+to inspect the tracked processes.
+
+`--temporary` declares that the command and its helpers should not persist after
+the command ends. Without it, retained state is preserved. A directly launched
+process is registered before execution; descendants are observed approximately
+every 250 ms while the command runs, with native identity and parent checks.
+Helpers that fork and reparent between observations can be missed. Observation
+stops when the command exits; later descendants cannot be retroactively tracked.
+
+An observed leftover from one complete temporary launch whose command exited
+with code 0 receives `REVIEW` with a score floor of 35 and an explicit explanation.
+This does not establish safe termination: memory state and external dependencies
+are not inspected. Running owners, failed/interrupted commands, persistent
+launches, incomplete records, and overlapping runs preserve uncertain state.
+Codex, launchd, and existing infrastructure protections always take priority.
+An absent wrapper or stale record never synthesizes successful completion.
+
+Metadata lives in `~/Library/Application Support/Linger/launch-runs/`, using
+private directories/files, atomic writes, and one record per run. It includes
+run ID, UID, boot ID, precise PID/birth identities, temporary declaration, status,
+exit code, update time, and coverage flag. Arguments, environment, executable
+paths, and command output are not stored. At most 256 identities per run and
+256 files are supported. Records older than seven days are ignored; files are
+not automatically removed. At the file limit, starting a new tracked command
+fails before executing it; archive or remove old records from Linger's directory
+to make room. Another boot's records are rejected.
+
+`--no-cache` in the monitor skips saved launch records as well as the Codex
+ownership cache. Launch tracking itself requires metadata writes and accepts
+only its own options, shown by `linger run --help`. JSON findings add `tracking`
+and `service` metadata without changing the existing chat ownership fields.
+
 ## Review the evidence
 
 | Key | Action |
@@ -106,7 +153,7 @@ when there is room after a resize. Help is scrollable with `j` / `k`.
 
 | Process class | Meaning |
 | --- | --- |
-| `REVIEW` | Parentage, age, and/or observed CPU inactivity merit inspection; abandonment is unproven. |
+| `REVIEW` | Generic suspicion or an observed leftover after successful temporary owner exit merits inspection; safe termination is unproven. |
 | `OBSERVED` | Little suspicion evidence. |
 | `CODEX CORE` | Codex app/agent infrastructure; preserve. |
 | `CODEX ACTIVE` | An active registry execution is observed, or an associated saved chat has recent/active lifecycle evidence; preserve. |
@@ -114,6 +161,9 @@ when there is room after a resize. Help is scrollable with `j` / `k`.
 | `CODEX MULTI` | The same native process has been associated with multiple chats; preserve every association. |
 | `CODEX UNKNOWN` | Codex helper/descendant whose owner chat is unresolved; preserve possible active or saved-chat tool state. |
 | `PROTECTED` | System/app/service infrastructure, another user's process, or Linger's caller ancestry. |
+| `LAUNCHD` | Verified launchd job or a snapshot descendant; managed service, preserve. |
+| `TRACKED` | Opt-in launch whose command has not reported exit; preserve. |
+| `TRACK UNKNOWN` | Failed, interrupted, persistent, shared, or incomplete launch lifecycle; preserve. |
 | `ZOMBIE` | Exited but unreaped. Signaling it cannot recover meaningful memory; the parent must reap it. |
 
 The demo additionally shows a **synthetic** `LIKELY STALE` example to illustrate
@@ -198,8 +248,9 @@ To forget persisted history, quit all Linger instances and remove the matching
 `ownership-v1-<scope>.json` file in Linger's own directory.
 
 The process table's `SOURCE` column shows `active` for a registry execution in the
-latest sample, `cached` for a remembered association, `launch` for launch context,
-or `-` for no association. Details and JSON expose all observed chat IDs, native
+latest sample, `cached` for a remembered association, `tracked` for opt-in launch
+provenance, `launchd` for a verified managed service, `launch` for chat launch
+context, or `-` for no association, in that priority order. Details and JSON expose all observed chat IDs, native
 birth time, source, last registry observation, and current registry activity.
 Activity expires if observation stops; remembered ownership remains protective.
 Multiple observed chats are retained rather than presented as exclusive ownership.

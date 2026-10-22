@@ -50,7 +50,77 @@ Scores of 35 or more are `REVIEW`, never a verified stale determination. Kernel
 process, with an explanation that it has already exited. It is not a reclaimable
 helper. A future UI may separate this into its own diagnostic group.
 
-## Ownership evidence and remaining gaps
+## Launchd service recognition
+
+The monitor reads `/bin/launchctl list` in its inherited bootstrap domain. A
+running job's exact PID and label are matched to same-user PID-1 children in
+the process snapshot, with native birth, parent, and UID checked before and
+after reading. Snapshot descendants inherit protection, with cycle detection.
+Unlisted PID-1 children retain the generic rules; they are not assumed managed.
+System and other-user processes keep their existing protections. The monitor
+does not elevate privileges, change domains, load/unload jobs, or invoke service
+actions. Coverage is the caller's launchd domain, not all domains on the machine.
+
+Up to 64 matching jobs per snapshot receive an additional `launchctl list LABEL`
+read, with a one-second scheduling budget and two-second per-command timeout.
+Exact PID and simple `OnDemand` booleans yield `kept running` or `on demand
+or conditional`; other formats, failed detail reads, and jobs beyond the detail
+limit have `unknown` policy. A conditional policy does not establish when a job
+will restart. These diagnostics are advisory and format-dependent. Raw detail
+output can contain arguments/environment; it is never emitted or retained.
+Labels and supported policy metadata are the only retained service fields.
+Unavailable listings produce a warning, never an inferred disposable job.
+
+Recognized non-Codex jobs and descendants receive `LAUNCHD`, score 0, and
+protection. Codex labels and associations remain intact. Service management can
+legitimately keep a process running or relaunch it, as described in Apple's
+[launchd guide](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html).
+
+## Opt-in launch provenance
+
+`linger run [--temporary] -- COMMAND ...` forks a child behind a pipe gate,
+registers its native PID/birth/UID/parent before execution, then executes the
+command without a shell. Registration failure closes the gate and reaps the
+unexecuted child. The wrapper inherits terminal job control and stdio; it never
+sends process signals. It waits for the directly launched command and preserves
+its exit status. Terminal Ctrl-C marks completion interrupted rather than
+successful, even if the command subsequently exits with code 0.
+
+While the command runs, 250 ms polling validates same-user snapshot identities
+and follows parent edges only through currently verified known members. Child
+births must not precede parent births, and both identities are rechecked at the
+join. Historical members are retained after reparenting; PID reuse cannot inherit
+membership. Missed short-lived parent edges and descendants born after owner
+exit remain unknown. No process arguments or launch environment are inspected
+by this tracker, and a declared temporary lifetime is user intent rather than
+proof that a process has no useful memory state or external clients.
+
+One owner-only JSON record per run is atomically stored under Linger's private
+`launch-runs/` directory. Version 1 includes run ID, UID, boot ID, root and member
+native identities, temporary declaration, owner status and exit code, update
+time, and incomplete-coverage flag. Writes checkpoint once per second and at
+exit. The existing ownership store's directory/file checks reject symlinks,
+hard-linked files, wrong owners, and nonprivate permissions. Reads reject
+duplicates, malformed identities, nonfinite/future times, incompatible schemas,
+changed files, wrong boots, and size/count limits. Limits are 64 KiB per file,
+256 files, and 256 identities per run; records older than seven days are ignored
+without deleting files. Concurrent wrappers use separate random run IDs. At the
+file limit new registrations fail before releasing the command's gate.
+
+Only a single, complete, declared temporary launch with an observed owner exit
+code 0 can add leftover evidence and a Review priority floor of 35. Existing
+protection and zombie diagnostics win first. Running owners are protected as
+`TRACKED`; other nonqualifying matches are protected as `TRACK UNKNOWN`. Multiple
+matching runs, interrupted/failed/persistent launches, and incomplete records
+never create a leftover recommendation. Partial read coverage marks all returned
+records incomplete. A vanished wrapper or old heartbeat never establishes exit.
+No stop action or safe-to-stop classification is introduced.
+
+Tracking fields remain separate from Codex chat ownership. Native identities are
+revalidated on scan, and `--no-cache` skips all saved launch records as well as
+the ownership cache. The demo neither launches commands nor reads these records.
+
+## Codex ownership evidence and remaining gaps
 
 Direct launch-context IDs bind commands to their originating chat when exposed;
 this is not proof of exclusive MCP-server ownership. Helpers with a live Codex
@@ -169,6 +239,8 @@ and do not fabricate new history samples.
 - `tui.py`: presentation, view controls, and background refresh.
 - `history.py`: bounded, identity-isolated CPU/RSS display samples.
 - `terminal.py`: cell-width-aware clipping, panel drawing, and terminal palettes.
+- `launchd.py`: current-domain service recognition and protective bindings.
+- `tracking.py`: optional command launch, private provenance, and leftover evidence.
 - `demo.py`: synthetic, clearly marked future and current examples.
 
 Live behavior was developed against the locally observed Codex `state_5.sqlite`

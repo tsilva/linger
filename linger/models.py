@@ -32,6 +32,20 @@ class Chat:
 
 
 @dataclass(frozen=True)
+class Service:
+    label: str
+    policy: str = "unknown"
+
+
+@dataclass(frozen=True)
+class TrackedRun:
+    id: str
+    temporary: bool
+    status: str
+    exit_code: int | None = None
+
+
+@dataclass(frozen=True)
 class Finding:
     process: Process
     label: str
@@ -46,6 +60,8 @@ class Finding:
     owners: tuple[str, ...] = ()
     registry_active: bool = False
     registry_observed_at: float | None = None
+    service: Service | None = None
+    tracking: tuple[TrackedRun, ...] = ()
 
 
 @dataclass

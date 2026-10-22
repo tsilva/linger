@@ -15,10 +15,10 @@ from helpers that may still hold a saved chat's REPL variables or browser state.
 
 *Rendered capture of Linger running on macOS, with scoring evidence for the selected process.*
 
-**This is a read-only prototype.** It has no kill, signal, pause, renice, cleanup,
+**Monitoring is read-only.** Linger has no kill, signal, pause, renice, cleanup,
 or settings-changing operations, and no background service or network client.
-It writes ownership history only to Linger's own private cache; `--no-cache`
-disables those cache reads and writes. Codex files remain read-only.
+It stores ownership and opt-in launch metadata privately; `--no-cache` disables
+saved metadata in the monitor. Codex files remain read-only.
 
 ## Try it
 
@@ -65,8 +65,21 @@ expand CPU/RSS history. Press `Tab` for saved-chat associations, `c` to cycle
 scopes, `?` for help, and `q` to quit. The view refreshes every five seconds;
 CPU usage needs two samples. History stays in memory for this run.
 
+To track a command and its observed helpers from launch:
+
+```sh
+linger run --temporary -- python3 your_script.py
+```
+
+Use `--temporary` only when those helpers are intended to end with the command.
+Omit it to preserve persistent state. Run `linger` in another terminal to inspect
+the evidence. Successfully exited temporary commands can flag observed leftovers
+for Review; nothing is stopped automatically. [Tracking details](docs/usage.md#optional-launch-tracking).
+
 ## Read the result
 
+- **Recognize managed services.** Verified launchd jobs and their descendants
+  stay protected, with service labels and available restart-policy information.
 - **Prioritize inspection.** `REVIEW` flags evidence worth checking, such as a
   missing parent or observed CPU inactivity. Scores are rule weights, not
   probabilities or permission to terminate anything.

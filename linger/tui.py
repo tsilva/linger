@@ -32,11 +32,15 @@ def source_label(finding):
         return "active"
     if finding.registry_observed_at is not None:
         return "cached"
+    if finding.tracking:
+        return "tracked"
+    if finding.service:
+        return "launchd"
     return "launch" if finding.owners else "-"
 
 
 def row_tone(finding):
-    if finding.label == "CODEX UNKNOWN":
+    if finding.label in {"CODEX UNKNOWN", "TRACK UNKNOWN"}:
         return "unknown"
     if finding.registry_active and finding.label == "CODEX ACTIVE":
         return "mint"
@@ -347,7 +351,10 @@ class UI:
         """Return factual lines with optional weights; full reasons stay scrollable."""
         p = row.process
         lines = []
-        if not row.protected and row.label in {"REVIEW", "OBSERVED"}:
+        if row.tracking and not row.protected and row.label == "REVIEW":
+            lines.append(("Temporary owner exited successfully; observed helper remains.", None))
+            lines.append(("Retained state and dependencies unknown; review before stopping.", None))
+        elif not row.protected and row.label in {"REVIEW", "OBSERVED"}:
             factors = score_factors(p, self.snapshot.at, {f.process.pid for f in self.snapshot.findings})
             if sum(f.weight for f in factors) == row.score:
                 lines = [(f.label, f.weight) for f in factors]
@@ -376,6 +383,10 @@ class UI:
             context.append(("Native birth (us)", str(row.birth_us)))
         if row.registry_observed_at is not None:
             context.append(("Registry last seen", age(self.snapshot.at - row.registry_observed_at) + " ago"))
+        if row.service:
+            context.extend([("Launchd service", row.service.label), ("Restart policy", row.service.policy)])
+        for tracked in row.tracking:
+            context.append(("Tracked run", f"{tracked.id} / {'temporary' if tracked.temporary else 'persistent'} / {tracked.status} / exit {tracked.exit_code}"))
         return lines, context
 
     def _parent_name(self, pid):
@@ -535,7 +546,11 @@ class UI:
             "Launch context identifies command origin, not exclusive helper ownership.",
             "Registry history uses PID + precise native birth; missing records never mean stale.",
             "Ownership associations persist in Linger's own cache; --no-cache disables it.",
-            "There are no process actions or Codex settings changes.",
+            "The monitor never stops processes or changes Codex settings.",
+            "LAUNCHD: verified managed service or descendant; preserve.",
+            "TRACKED: command has not reported exit. TRACK UNKNOWN: preserve uncertain history.",
+            "Temporary leftovers with observed successful owner exit receive Review, not stop approval.",
+            "Optional: linger run --temporary -- command (metadata stored privately).",
         ]
         if self.snapshot and self.snapshot.warnings:
             lines += ["", "CURRENT DIAGNOSTICS", *self.snapshot.warnings]

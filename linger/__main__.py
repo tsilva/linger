@@ -11,14 +11,29 @@ from .tui import clean, filtered, run
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Linger: read-only macOS process triage. No process actions exist.")
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "run":
+        parser = argparse.ArgumentParser(prog="linger run", description="Launch and track a command; never automatically terminate it.")
+        parser.add_argument("--temporary", action="store_true", help="Declare this command and its observed helpers temporary; leftovers still require review.")
+        parser.add_argument("command", nargs=argparse.REMAINDER, help="-- command [arguments ...]")
+        args = parser.parse_args(argv[1:])
+        command = args.command[1:] if args.command[:1] == ["--"] else args.command
+        if not command:
+            parser.error("Provide a command: linger run [--temporary] -- command [arguments ...]")
+        from .tracking import run_command
+        try:
+            return run_command(command, args.temporary)
+        except (OSError, RuntimeError) as error:
+            print(f"linger: launch tracking could not start ({type(error).__name__}); check private storage, boot identity, and the 256-record limit", file=sys.stderr)
+            return 1
+    parser = argparse.ArgumentParser(description="Linger: read-only macOS process triage. Use 'linger run --help' for optional command launch tracking.")
     parser.add_argument("--version", action="version", version=f"linger {__version__}")
     parser.add_argument("--once", action="store_true", help="Print one read-only snapshot instead of opening the TUI.")
     parser.add_argument("--json", action="store_true", help="Print one structured snapshot; contains local paths and chat IDs.")
     parser.add_argument("--demo", action="store_true", help="Use synthetic examples; do not inspect local processes or chats.")
     parser.add_argument("--scope", choices=("all", "codex", "review"), default="all")
     parser.add_argument("--codex-home", type=Path, help="Read a different Codex state directory (default: ~/.codex).")
-    parser.add_argument("--no-cache", action="store_true", help="Do not read or write Linger's persistent ownership cache.")
+    parser.add_argument("--no-cache", action="store_true", help="Skip persistent ownership cache and saved launch records.")
     args = parser.parse_args(argv)
     scanner = None
     if args.demo:
