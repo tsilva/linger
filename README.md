@@ -109,6 +109,10 @@ estimate of reclaimable RAM.
   [read-only signal audit](docs/read-only-signals.md): verified observations and
   the remaining gaps in ephemeral-helper detection.
 
+CI runs the offline test suite and synthetic demo on macOS with Python 3.11 and
+3.14 for pushes to `main` and pull requests. No third-party dependencies are
+installed. The demo does not inspect real processes or chats.
+
 To run the test suite from the repository root:
 
 ```sh
